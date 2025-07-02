@@ -80,24 +80,50 @@ function displayResults(response) {
     if (response.status === 'OK' && response.data && response.data.rows) {
         const rows = response.data.rows;
         
-        // Calculate summary from the data
-        const totalRevenue = rows.reduce((sum, row) => sum + (row.estimated_revenue || 0), 0);
-        const totalImpressions = rows.reduce((sum, row) => sum + (row.impressions || 0), 0);
-        const totalClicks = rows.reduce((sum, row) => sum + (row.total_clicks || 0), 0);
+        // Aggregate data by channelname3
+        const aggregatedData = {};
+        
+        rows.forEach(row => {
+            const channel = row.channelName3 || 'Unknown Channel';
+            
+            if (!aggregatedData[channel]) {
+                aggregatedData[channel] = {
+                    channelName3: channel,
+                    estimated_revenue: 0,
+                    impressions: 0,
+                    total_clicks: 0,
+                    count: 0
+                };
+            }
+            
+            aggregatedData[channel].estimated_revenue += row.estimated_revenue || 0;
+            aggregatedData[channel].impressions += row.impressions || 0;
+            aggregatedData[channel].total_clicks += row.total_clicks || 0;
+            aggregatedData[channel].count += 1;
+        });
+        
+        // Convert aggregated data to array
+        const aggregatedRows = Object.values(aggregatedData);
+        
+        // Calculate summary from the aggregated data
+        const totalRevenue = aggregatedRows.reduce((sum, row) => sum + row.estimated_revenue, 0);
+        const totalImpressions = aggregatedRows.reduce((sum, row) => sum + row.impressions, 0);
+        const totalClicks = aggregatedRows.reduce((sum, row) => sum + row.total_clicks, 0);
         
         summaryDiv.innerHTML = `
             <div class="summary-card">
                 <h3>Summary</h3>
-                <p><strong>Total Records:</strong> ${rows.length}</p>
+                <p><strong>Total Channels:</strong> ${aggregatedRows.length}</p>
                 <p><strong>Total Revenue:</strong> $${totalRevenue.toFixed(2)}</p>
                 <p><strong>Total Impressions:</strong> ${totalImpressions.toLocaleString()}</p>
                 <p><strong>Total Clicks:</strong> ${totalClicks.toLocaleString()}</p>
             </div>
         `;
         
-        // Display data in a table
-        if (rows.length > 0) {
-            const headers = Object.keys(rows[0]);
+        // Display aggregated data in a table
+        if (aggregatedRows.length > 0) {
+            // Define headers to display (excluding searches)
+            const headers = ['channelName3', 'estimated_revenue', 'impressions', 'total_clicks'];
             let tableHTML = '<div class="table-wrapper"><table><thead><tr>';
             
             headers.forEach(header => {
@@ -106,7 +132,7 @@ function displayResults(response) {
             
             tableHTML += '</tr></thead><tbody>';
             
-            rows.forEach(row => {
+            aggregatedRows.forEach(row => {
                 tableHTML += '<tr>';
                 headers.forEach(header => {
                     let value = row[header];
@@ -114,11 +140,8 @@ function displayResults(response) {
                     // Format different types of values
                     if (header === 'estimated_revenue' && typeof value === 'number') {
                         value = '$' + value.toFixed(2);
-                    } else if ((header === 'impressions' || header === 'total_clicks' || header === 'searches') && typeof value === 'number') {
+                    } else if ((header === 'impressions' || header === 'total_clicks') && typeof value === 'number') {
                         value = value.toLocaleString();
-                    } else if (header === 'date') {
-                        // Format date nicely
-                        value = new Date(value).toLocaleString();
                     }
                     
                     tableHTML += `<td>${value !== null && value !== undefined ? value : '-'}</td>`;
